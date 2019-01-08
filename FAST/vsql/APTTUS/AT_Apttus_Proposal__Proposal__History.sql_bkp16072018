@@ -1,0 +1,111 @@
+/****
+****Script Name	  : AT_Apttus_Proposal__Proposal__History.sql
+****Description   : Append data load for AT_Apttus_Proposal__Proposal__History
+****/
+
+/*Setting timing on */
+\timing
+
+/**SET SESSION AUTOCOMMIT TO OFF;**/
+
+--SET SESSION AUTOCOMMIT TO OFF;
+
+\set ON_ERROR_STOP on
+
+CREATE LOCAL TEMP TABLE Start_Time_Tmp ON COMMIT PRESERVE ROWS AS select sysdate st from dual;
+
+/* Inserting values into Audit table  */
+
+INSERT INTO swt_rpt_stg.FAST_LD_AUDT
+ (
+       SUBJECT_AREA
+      ,TBL_NM
+      ,LD_DT
+      ,START_DT_TIME
+      ,END_DT_TIME
+      ,SRC_REC_CNT
+      ,TGT_REC_CNT
+      ,COMPLTN_STAT
+      )
+select 'APTTUS','AT_Apttus_Proposal__Proposal__History',sysdate::date,sysdate,null,(select count(*) from "swt_rpt_stg"."AT_Apttus_Proposal__Proposal__History") ,null,'N';
+Commit;
+
+INSERT /*+DIRECT*/ INTO swt_rpt_stg.AT_Apttus_Proposal__Proposal__History_Hist SELECT * FROM swt_rpt_stg.AT_Apttus_Proposal__Proposal__History;
+COMMIT;
+
+CREATE LOCAL TEMP TABLE duplicates_records ON COMMIT PRESERVE ROWS AS (
+select id,max(auto_id) as auto_id from swt_rpt_stg.AT_Apttus_Proposal__Proposal__History where id in (
+select id from swt_rpt_stg.AT_Apttus_Proposal__Proposal__History group by id,CREATEDDATE having count(1)>1)
+group by id);
+
+delete from swt_rpt_stg.AT_Apttus_Proposal__Proposal__History where exists(
+select 1 from duplicates_records t2 where swt_rpt_stg.AT_Apttus_Proposal__Proposal__History.id=t2.id and swt_rpt_stg.AT_Apttus_Proposal__Proposal__History.auto_id<t2.auto_id);
+
+commit;
+
+CREATE LOCAL TEMP TABLE AT_Apttus_Proposal__Proposal__History_stg_Tmp ON COMMIT PRESERVE ROWS AS
+(
+SELECT DISTINCT * FROM swt_rpt_stg.AT_Apttus_Proposal__Proposal__History)
+SEGMENTED BY HASH(ID,CREATEDDATE) ALL NODES;
+
+TRUNCATE TABLE swt_rpt_stg.AT_Apttus_Proposal__Proposal__History;
+
+
+INSERT /*DIRECT*/ INTO "swt_rpt_base".AT_Apttus_Proposal__Proposal__History
+(
+ Id
+,CreatedById
+,CreatedDate
+,Field
+,IsDeleted
+,NewValue
+,OldValue
+,ParentId
+,SWT_INS_DT
+)
+SELECT DISTINCT
+Id
+,CreatedById
+,CreatedDate
+,Field
+,IsDeleted
+,NewValue
+,OldValue
+,ParentId
+,SYSDATE AS SWT_INS_DT
+FROM AT_Apttus_Proposal__Proposal__History_stg_Tmp;
+
+
+/* Deleting partial audit entry */
+
+DELETE FROM swt_rpt_stg.FAST_LD_AUDT where SUBJECT_AREA = 'APTTUS' and
+TBL_NM = 'AT_Apttus_Proposal__Proposal__History' and
+COMPLTN_STAT = 'N' and
+LD_DT=sysdate::date and 
+SEQ_ID = (select max(SEQ_ID) from swt_rpt_stg.FAST_LD_AUDT where  SUBJECT_AREA = 'APTTUS' and  TBL_NM = 'AT_Apttus_Proposal__Proposal__History' and  COMPLTN_STAT = 'N');
+
+
+/* Inserting new audit entry with all stats */
+
+INSERT INTO swt_rpt_stg.FAST_LD_AUDT
+(
+SUBJECT_AREA
+,TBL_NM
+,LD_DT
+,START_DT_TIME
+,END_DT_TIME
+,SRC_REC_CNT
+,TGT_REC_CNT
+,COMPLTN_STAT
+)
+select 'APTTUS','AT_Apttus_Proposal__Proposal__History',sysdate::date,(select st from Start_Time_Tmp),sysdate,(select count(*) from "AT_Apttus_Proposal__Proposal__History_stg_Tmp") ,(select count(*) from swt_rpt_base.AT_Apttus_Proposal__Proposal__History where SWT_INS_DT::date = sysdate::date),'Y';
+
+Commit;
+
+
+select do_tm_task('mergeout','swt_rpt_stg.AT_Apttus_Proposal__Proposal__History_Hist');
+select do_tm_task('mergeout','swt_rpt_stg.FAST_LD_AUDT');
+SELECT ANALYZE_STATISTICS ('swt_rpt_base.AT_Apttus_Proposal__Proposal__History');
+
+
+

@@ -1,0 +1,454 @@
+/****
+****Script Name	  : AT_Apttus_Config2__ProductConfiguration__c.sql
+****Description   : Incremental data load for AT_Apttus_Config2__ProductConfiguration__c
+****/
+
+/* Setting timing on**/
+\timing
+
+\set ON_ERROR_STOP on
+
+CREATE LOCAL TEMP TABLE Start_Time_Tmp ON COMMIT PRESERVE ROWS AS select count(*) count, sysdate st from "swt_rpt_stg"."AT_Apttus_Config2__ProductConfiguration__c";
+
+/* Inserting values into Audit table  */
+
+INSERT INTO swt_rpt_stg.FAST_LD_AUDT
+ (
+       SUBJECT_AREA
+      ,TBL_NM
+      ,LD_DT
+      ,START_DT_TIME
+      ,END_DT_TIME
+      ,SRC_REC_CNT
+      ,TGT_REC_CNT
+      ,COMPLTN_STAT
+      )
+select 'APTTUS','AT_Apttus_Config2__ProductConfiguration__c',sysdate::date,sysdate,null,(select count from Start_Time_Tmp) ,null,'N';
+
+Commit; 
+  
+INSERT /*+DIRECT*/ INTO "swt_rpt_stg".AT_Apttus_Config2__ProductConfiguration__c_Hist select * from "swt_rpt_stg".AT_Apttus_Config2__ProductConfiguration__c;
+COMMIT;
+
+
+CREATE LOCAL TEMP TABLE duplicates_records ON COMMIT PRESERVE ROWS AS (
+select id,max(auto_id) as auto_id from swt_rpt_stg.AT_Apttus_Config2__ProductConfiguration__c where id in (
+select id from swt_rpt_stg.AT_Apttus_Config2__ProductConfiguration__c group by id,LASTMODIFIEDDATE having count(1)>1)
+group by id);
+
+delete from swt_rpt_stg.AT_Apttus_Config2__ProductConfiguration__c where exists(
+select 1 from duplicates_records t2 where swt_rpt_stg.AT_Apttus_Config2__ProductConfiguration__c.id=t2.id and swt_rpt_stg.AT_Apttus_Config2__ProductConfiguration__c.auto_id<t2.auto_id);
+
+commit;
+  
+CREATE LOCAL TEMP TABLE AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp ON COMMIT PRESERVE ROWS AS
+(
+SELECT DISTINCT * FROM swt_rpt_stg.AT_Apttus_Config2__ProductConfiguration__c)
+SEGMENTED BY HASH(ID,LastModifiedDate) ALL NODES;
+
+TRUNCATE TABLE swt_rpt_stg.AT_Apttus_Config2__ProductConfiguration__c;
+
+CREATE LOCAL TEMP TABLE AT_Apttus_Config2__ProductConfiguration__c_base_Tmp ON COMMIT PRESERVE ROWS AS
+(
+SELECT DISTINCT ID,LastModifiedDate FROM swt_rpt_base.AT_Apttus_Config2__ProductConfiguration__c)
+SEGMENTED BY HASH(ID,LastModifiedDate) ALL NODES;
+
+
+CREATE LOCAL TEMP TABLE AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp_Key ON COMMIT PRESERVE ROWS AS
+(
+SELECT id, max(LastModifiedDate) as LastModifiedDate FROM AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp group by id)
+SEGMENTED BY HASH(ID,LastModifiedDate) ALL NODES;
+
+/* Inserting deleted table data into Historical Table */
+
+insert /*+DIRECT*/ into swt_rpt_stg.AT_Apttus_Config2__ProductConfiguration__c_Hist
+(
+Id
+,OwnerId
+,Apttus_Config2__AncestorId__c
+,Apttus_Config2__BaseRelationCount__c
+,Apttus_Config2__CollaborationRequestId__c
+,Apttus_Config2__NumberOfItems__c
+,Apttus_Config2__OrderId__c
+,Apttus_Config2__PrimordialId__c
+,SWT_Total_Amount_on_Line_Items__c
+,SWT_Total_License_List_Price__c
+,SWT_VSOE_Total_Value__c
+,Name
+,CreatedById
+,CurrencyIsoCode
+,LastModifiedById
+,SWT_Addon_subtype__c
+,SWT_ADMTotalLicenseListPrice__c
+,Apttus_CMConfig__AgreementId__c
+,Apttus_Config2__ApprovalStatus__c
+,Apttus_CQApprov__Approval_Preview_Status__c
+,Apttus_CQApprov__Approval_Status__c
+,Apttus_Config2__BillingPreferenceId__c
+,Apttus_Config2__BillToAccountId__c
+,Apttus_Config2__BusinessObjectId__c
+,Apttus_Config2__BusinessObjectRefId__c
+,Apttus_Config2__BusinessObjectType__c
+,Apttus_Config2__CartDataCache__c
+,Apttus_Config2__CartDataCache2__c
+,Apttus_Config2__Comments__c
+,Apttus_Config2__ContractNumbers__c
+,Apttus_Config2__CostRollupInfo__c
+,Apttus_Config2__CouponCodes__c
+,Apttus_Config2__CurrentActiveTask__c
+,Apttus_Config2__Description__c
+,Apttus_Config2__EffectiveDate__c
+,Apttus_Config2__EffectivePriceListId__c
+,SWT_ESPTotalLicenseListPrice__c
+,Apttus_Config2__ExpectedEndDate__c
+,Apttus_Config2__ExpectedStartDate__c
+,Apttus_Config2__FinalizedDate__c
+,SWT_Go_To_Market_Route__c
+,SWT_IMGTotalLicenseListPrice__c
+,Apttus_Config2__IsPricePending__c
+,Apttus_Config2__IsTaskPending__c
+,Apttus_Config2__IsTransient__c
+,Apttus_Config2__IsValidationPending__c
+,SWT_ITOMTotalLicenseListPrice__c
+,Apttus_CQApprov__LineItem_Approval_Status__c
+,Apttus_Config2__LineItemsAwaitingPrice__c
+,Apttus_Config2__LocationId__c
+,SWT_Needs_Financing__c
+,SWT_Non_Standard_T_Cs__c
+,Apttus_Config2__PaymentTermId__c
+,Apttus_Config2__PriceListId__c
+,Apttus_QPConfig__Proposald__c
+,SWT_Quote_Type__c
+,SWT_Region__c
+,Apttus_Config2__RenewalAdjustmentAmount__c
+,Apttus_Config2__RenewalAdjustmentType__c
+,Apttus_Config2__ShipToAccountId__c
+,Apttus_Config2__AccountId__c
+,Apttus_Config2__Status__c
+,Apttus_Config2__SummaryGroupType__c
+,SWT_Sum_Of_Net_Discount_On_Education__c
+,SWT_T_Cs_Comments__c
+,SWT_Term__c
+,SWT_Update_on_Quote__c
+,Apttus_Config2__VersionNumber__c
+,SWT_Show_SA_Products__c
+,LastModifiedDate
+,SWT_Business_Unit_Agreement__c
+,IsDeleted
+,CreatedDate
+,SystemModstamp
+,LastActivityDate
+,Apttus_Config2__CurrentUserId__c
+,SWT_Submit_To_Distributor__c
+,SWT_Is_SVI_Opportunity__c
+,SWT_Is_Account_Federal__c
+,SWT_Subscription_Asset__c
+,LD_DT
+,SWT_INS_DT
+,d_source
+)
+select 
+Id
+,OwnerId
+,Apttus_Config2__AncestorId__c
+,Apttus_Config2__BaseRelationCount__c
+,Apttus_Config2__CollaborationRequestId__c
+,Apttus_Config2__NumberOfItems__c
+,Apttus_Config2__OrderId__c
+,Apttus_Config2__PrimordialId__c
+,SWT_Total_Amount_on_Line_Items__c
+,SWT_Total_License_List_Price__c
+,SWT_VSOE_Total_Value__c
+,Name
+,CreatedById
+,CurrencyIsoCode
+,LastModifiedById
+,SWT_Addon_subtype__c
+,SWT_ADMTotalLicenseListPrice__c
+,Apttus_CMConfig__AgreementId__c
+,Apttus_Config2__ApprovalStatus__c
+,Apttus_CQApprov__Approval_Preview_Status__c
+,Apttus_CQApprov__Approval_Status__c
+,Apttus_Config2__BillingPreferenceId__c
+,Apttus_Config2__BillToAccountId__c
+,Apttus_Config2__BusinessObjectId__c
+,Apttus_Config2__BusinessObjectRefId__c
+,Apttus_Config2__BusinessObjectType__c
+,Apttus_Config2__CartDataCache__c
+,Apttus_Config2__CartDataCache2__c
+,Apttus_Config2__Comments__c
+,Apttus_Config2__ContractNumbers__c
+,Apttus_Config2__CostRollupInfo__c
+,Apttus_Config2__CouponCodes__c
+,Apttus_Config2__CurrentActiveTask__c
+,Apttus_Config2__Description__c
+,Apttus_Config2__EffectiveDate__c
+,Apttus_Config2__EffectivePriceListId__c
+,SWT_ESPTotalLicenseListPrice__c
+,Apttus_Config2__ExpectedEndDate__c
+,Apttus_Config2__ExpectedStartDate__c
+,Apttus_Config2__FinalizedDate__c
+,SWT_Go_To_Market_Route__c
+,SWT_IMGTotalLicenseListPrice__c
+,Apttus_Config2__IsPricePending__c
+,Apttus_Config2__IsTaskPending__c
+,Apttus_Config2__IsTransient__c
+,Apttus_Config2__IsValidationPending__c
+,SWT_ITOMTotalLicenseListPrice__c
+,Apttus_CQApprov__LineItem_Approval_Status__c
+,Apttus_Config2__LineItemsAwaitingPrice__c
+,Apttus_Config2__LocationId__c
+,SWT_Needs_Financing__c
+,SWT_Non_Standard_T_Cs__c
+,Apttus_Config2__PaymentTermId__c
+,Apttus_Config2__PriceListId__c
+,Apttus_QPConfig__Proposald__c
+,SWT_Quote_Type__c
+,SWT_Region__c
+,Apttus_Config2__RenewalAdjustmentAmount__c
+,Apttus_Config2__RenewalAdjustmentType__c
+,Apttus_Config2__ShipToAccountId__c
+,Apttus_Config2__AccountId__c
+,Apttus_Config2__Status__c
+,Apttus_Config2__SummaryGroupType__c
+,SWT_Sum_Of_Net_Discount_On_Education__c
+,SWT_T_Cs_Comments__c
+,SWT_Term__c
+,SWT_Update_on_Quote__c
+,Apttus_Config2__VersionNumber__c
+,SWT_Show_SA_Products__c
+,LastModifiedDate
+,SWT_Business_Unit_Agreement__c
+,IsDeleted
+,CreatedDate
+,SystemModstamp
+,LastActivityDate
+,Apttus_Config2__CurrentUserId__c
+,SWT_Submit_To_Distributor__c
+,SWT_Is_SVI_Opportunity__c
+,SWT_Is_Account_Federal__c
+,SWT_Subscription_Asset__c
+,SYSDATE AS LD_DT
+,SWT_INS_DT
+,'base'
+FROM "swt_rpt_base".AT_Apttus_Config2__ProductConfiguration__c WHERE id in
+(SELECT STG.id FROM AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp_Key STG JOIN AT_Apttus_Config2__ProductConfiguration__c_base_Tmp
+ON STG.id = AT_Apttus_Config2__ProductConfiguration__c_base_Tmp.id AND STG.LastModifiedDate >= AT_Apttus_Config2__ProductConfiguration__c_base_Tmp.LastModifiedDate);
+
+/* Deleting before seven days data from current date in the Historical Table */  
+
+delete /*+DIRECT*/ from "swt_rpt_stg"."AT_Apttus_Config2__ProductConfiguration__c_Hist"  where LD_DT::date <= TIMESTAMPADD(DAY,-7,sysdate)::date;
+
+
+/* Incremental VSQL script for loading data from Stage to Base */
+
+DELETE /*+DIRECT*/ FROM "swt_rpt_base".AT_Apttus_Config2__ProductConfiguration__c WHERE id in
+(SELECT STG.id FROM AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp_Key STG JOIN AT_Apttus_Config2__ProductConfiguration__c_base_Tmp
+ON STG.id = AT_Apttus_Config2__ProductConfiguration__c_base_Tmp.id AND STG.LastModifiedDate >= AT_Apttus_Config2__ProductConfiguration__c_base_Tmp.LastModifiedDate);
+
+
+INSERT /*+DIRECT*/ INTO "swt_rpt_base".AT_Apttus_Config2__ProductConfiguration__c
+(
+Id
+,OwnerId
+,Apttus_Config2__AncestorId__c
+,Apttus_Config2__BaseRelationCount__c
+,Apttus_Config2__CollaborationRequestId__c
+,Apttus_Config2__NumberOfItems__c
+,Apttus_Config2__OrderId__c
+,Apttus_Config2__PrimordialId__c
+,SWT_Total_Amount_on_Line_Items__c
+,SWT_Total_License_List_Price__c
+,SWT_VSOE_Total_Value__c
+,Name
+,CreatedById
+,CurrencyIsoCode
+,LastModifiedById
+,SWT_Addon_subtype__c
+,SWT_ADMTotalLicenseListPrice__c
+,Apttus_CMConfig__AgreementId__c
+,Apttus_Config2__ApprovalStatus__c
+,Apttus_CQApprov__Approval_Preview_Status__c
+,Apttus_CQApprov__Approval_Status__c
+,Apttus_Config2__BillingPreferenceId__c
+,Apttus_Config2__BillToAccountId__c
+,Apttus_Config2__BusinessObjectId__c
+,Apttus_Config2__BusinessObjectRefId__c
+,Apttus_Config2__BusinessObjectType__c
+,Apttus_Config2__CartDataCache__c
+,Apttus_Config2__CartDataCache2__c
+,Apttus_Config2__Comments__c
+,Apttus_Config2__ContractNumbers__c
+,Apttus_Config2__CostRollupInfo__c
+,Apttus_Config2__CouponCodes__c
+,Apttus_Config2__CurrentActiveTask__c
+,Apttus_Config2__Description__c
+,Apttus_Config2__EffectiveDate__c
+,Apttus_Config2__EffectivePriceListId__c
+,SWT_ESPTotalLicenseListPrice__c
+,Apttus_Config2__ExpectedEndDate__c
+,Apttus_Config2__ExpectedStartDate__c
+,Apttus_Config2__FinalizedDate__c
+,SWT_Go_To_Market_Route__c
+,SWT_IMGTotalLicenseListPrice__c
+,Apttus_Config2__IsPricePending__c
+,Apttus_Config2__IsTaskPending__c
+,Apttus_Config2__IsTransient__c
+,Apttus_Config2__IsValidationPending__c
+,SWT_ITOMTotalLicenseListPrice__c
+,Apttus_CQApprov__LineItem_Approval_Status__c
+,Apttus_Config2__LineItemsAwaitingPrice__c
+,Apttus_Config2__LocationId__c
+,SWT_Needs_Financing__c
+,SWT_Non_Standard_T_Cs__c
+,Apttus_Config2__PaymentTermId__c
+,Apttus_Config2__PriceListId__c
+,Apttus_QPConfig__Proposald__c
+,SWT_Quote_Type__c
+,SWT_Region__c
+,Apttus_Config2__RenewalAdjustmentAmount__c
+,Apttus_Config2__RenewalAdjustmentType__c
+,Apttus_Config2__ShipToAccountId__c
+,Apttus_Config2__AccountId__c
+,Apttus_Config2__Status__c
+,Apttus_Config2__SummaryGroupType__c
+,SWT_Sum_Of_Net_Discount_On_Education__c
+,SWT_T_Cs_Comments__c
+,SWT_Term__c
+,SWT_Update_on_Quote__c
+,Apttus_Config2__VersionNumber__c
+,SWT_Show_SA_Products__c
+,LastModifiedDate
+,SWT_Business_Unit_Agreement__c
+,IsDeleted
+,CreatedDate
+,SystemModstamp
+,LastActivityDate
+,Apttus_Config2__CurrentUserId__c
+,SWT_Submit_To_Distributor__c
+,SWT_Is_SVI_Opportunity__c
+,SWT_Is_Account_Federal__c
+,SWT_Subscription_Asset__c
+,SWT_INS_DT
+)
+SELECT DISTINCT 
+AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp.Id
+,OwnerId
+,Apttus_Config2__AncestorId__c
+,Apttus_Config2__BaseRelationCount__c
+,Apttus_Config2__CollaborationRequestId__c
+,Apttus_Config2__NumberOfItems__c
+,Apttus_Config2__OrderId__c
+,Apttus_Config2__PrimordialId__c
+,SWT_Total_Amount_on_Line_Items__c
+,SWT_Total_License_List_Price__c
+,SWT_VSOE_Total_Value__c
+,Name
+,CreatedById
+,CurrencyIsoCode
+,LastModifiedById
+,SWT_Addon_subtype__c
+,SWT_ADMTotalLicenseListPrice__c
+,Apttus_CMConfig__AgreementId__c
+,Apttus_Config2__ApprovalStatus__c
+,Apttus_CQApprov__Approval_Preview_Status__c
+,Apttus_CQApprov__Approval_Status__c
+,Apttus_Config2__BillingPreferenceId__c
+,Apttus_Config2__BillToAccountId__c
+,Apttus_Config2__BusinessObjectId__c
+,Apttus_Config2__BusinessObjectRefId__c
+,Apttus_Config2__BusinessObjectType__c
+,Apttus_Config2__CartDataCache__c
+,Apttus_Config2__CartDataCache2__c
+,Apttus_Config2__Comments__c
+,Apttus_Config2__ContractNumbers__c
+,Apttus_Config2__CostRollupInfo__c
+,Apttus_Config2__CouponCodes__c
+,Apttus_Config2__CurrentActiveTask__c
+,Apttus_Config2__Description__c
+,Apttus_Config2__EffectiveDate__c
+,Apttus_Config2__EffectivePriceListId__c
+,SWT_ESPTotalLicenseListPrice__c
+,Apttus_Config2__ExpectedEndDate__c
+,Apttus_Config2__ExpectedStartDate__c
+,Apttus_Config2__FinalizedDate__c
+,SWT_Go_To_Market_Route__c
+,SWT_IMGTotalLicenseListPrice__c
+,Apttus_Config2__IsPricePending__c
+,Apttus_Config2__IsTaskPending__c
+,Apttus_Config2__IsTransient__c
+,Apttus_Config2__IsValidationPending__c
+,SWT_ITOMTotalLicenseListPrice__c
+,Apttus_CQApprov__LineItem_Approval_Status__c
+,Apttus_Config2__LineItemsAwaitingPrice__c
+,Apttus_Config2__LocationId__c
+,SWT_Needs_Financing__c
+,SWT_Non_Standard_T_Cs__c
+,Apttus_Config2__PaymentTermId__c
+,Apttus_Config2__PriceListId__c
+,Apttus_QPConfig__Proposald__c
+,SWT_Quote_Type__c
+,SWT_Region__c
+,Apttus_Config2__RenewalAdjustmentAmount__c
+,Apttus_Config2__RenewalAdjustmentType__c
+,Apttus_Config2__ShipToAccountId__c
+,Apttus_Config2__AccountId__c
+,Apttus_Config2__Status__c
+,Apttus_Config2__SummaryGroupType__c
+,SWT_Sum_Of_Net_Discount_On_Education__c
+,SWT_T_Cs_Comments__c
+,SWT_Term__c
+,SWT_Update_on_Quote__c
+,Apttus_Config2__VersionNumber__c
+,SWT_Show_SA_Products__c
+,AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp.LastModifiedDate
+,SWT_Business_Unit_Agreement__c
+,IsDeleted
+,CreatedDate
+,SystemModstamp
+,LastActivityDate
+,Apttus_Config2__CurrentUserId__c
+,SWT_Submit_To_Distributor__c
+,SWT_Is_SVI_Opportunity__c
+,SWT_Is_Account_Federal__c
+,SWT_Subscription_Asset__c
+,SYSDATE
+FROM AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp JOIN AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp_Key ON AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp.id= AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp_Key.id AND AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp.LastModifiedDate=AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp_Key.LastModifiedDate
+WHERE NOT EXISTS
+(SELECT 1 FROM "swt_rpt_base".AT_Apttus_Config2__ProductConfiguration__c BASE
+WHERE AT_Apttus_Config2__ProductConfiguration__c_stg_Tmp.id = BASE.id);
+
+		
+/* Deleting partial audit entry */
+
+DELETE FROM swt_rpt_stg.FAST_LD_AUDT where SUBJECT_AREA = 'APTTUS' and
+TBL_NM = 'AT_Apttus_Config2__ProductConfiguration__c' and
+COMPLTN_STAT = 'N' and
+LD_DT=sysdate::date and 
+SEQ_ID = (select max(SEQ_ID) from swt_rpt_stg.FAST_LD_AUDT where  SUBJECT_AREA = 'APTTUS' and  TBL_NM = 'AT_Apttus_Config2__ProductConfiguration__c' and  COMPLTN_STAT = 'N');
+
+
+/* Inserting new audit entry with all stats */
+
+INSERT INTO swt_rpt_stg.FAST_LD_AUDT
+(
+SUBJECT_AREA
+,TBL_NM
+,LD_DT
+,START_DT_TIME
+,END_DT_TIME
+,SRC_REC_CNT
+,TGT_REC_CNT
+,COMPLTN_STAT
+)
+select 'APTTUS','AT_Apttus_Config2__ProductConfiguration__c',sysdate::date,(select st from Start_Time_Tmp),sysdate,(select count from Start_Time_Tmp) ,(select count(*) from swt_rpt_base.AT_Apttus_Config2__ProductConfiguration__c where SWT_INS_DT::date = sysdate::date),'Y';
+
+Commit;
+
+
+select do_tm_task('mergeout','swt_rpt_stg.AT_Apttus_Config2__ProductConfiguration__c_Hist');
+select do_tm_task('mergeout','swt_rpt_base.AT_Apttus_Config2__ProductConfiguration__c');
+select do_tm_task('mergeout','swt_rpt_stg.FAST_LD_AUDT');
+select ANALYZE_STATISTICS('swt_rpt_base.AT_Apttus_Config2__ProductConfiguration__c');
+
+

@@ -1,0 +1,354 @@
+
+/****
+****Script Name   : ZU_Subscription.sql
+****Description   : Incremental data load for ZU_Subscription
+****/
+/* Setting timing on**/
+\timing 
+\set ON_ERROR_STOP on
+
+CREATE LOCAL TEMP TABLE Start_Time_Tmp ON COMMIT PRESERVE ROWS AS select count(*) count, sysdate st from "swt_rpt_stg"."ZU_Subscription";
+
+/* Inserting values into Audit table  */
+
+INSERT INTO swt_rpt_stg.FAST_LD_AUDT
+(
+SUBJECT_AREA
+,TBL_NM
+,LD_DT
+,START_DT_TIME
+,END_DT_TIME
+,SRC_REC_CNT
+,TGT_REC_CNT
+,COMPLTN_STAT
+)
+select 'ZUORA','ZU_Subscription',sysdate::date,sysdate,null,(select count from Start_Time_Tmp) ,null,'N';
+
+Commit;
+
+INSERT /*+Direct*/ INTO swt_rpt_stg.ZU_Subscription_Hist SELECT * from swt_rpt_stg.ZU_Subscription;
+COMMIT;
+
+CREATE LOCAL TEMP TABLE duplicates_records ON COMMIT PRESERVE ROWS AS 
+select max(auto_id) as auto_id,ID from swt_rpt_stg.ZU_Subscription where ID in(
+select ID from swt_rpt_stg.ZU_Subscription
+group by ID,UpdatedDate having count(1)>1)
+group by ID;
+
+
+delete from swt_rpt_stg.ZU_Subscription  where exists(
+select 1 from duplicates_records t2 where swt_rpt_stg.ZU_Subscription.ID=t2.ID and swt_rpt_stg.ZU_Subscription.auto_id<t2.auto_id);
+
+COMMIT;
+
+
+
+CREATE LOCAL TEMP TABLE ZU_Subscription_stg_Tmp ON COMMIT PRESERVE ROWS AS
+(
+SELECT DISTINCT * FROM swt_rpt_stg.ZU_Subscription)
+SEGMENTED BY HASH(ID,UpdatedDate) ALL NODES;
+
+
+
+TRUNCATE TABLE swt_rpt_stg.ZU_Subscription;
+
+CREATE LOCAL TEMP TABLE ZU_Subscription_base_Tmp ON COMMIT PRESERVE ROWS AS
+(
+SELECT DISTINCT ID,UpdatedDate FROM swt_rpt_base.ZU_Subscription)
+SEGMENTED BY HASH(ID,UpdatedDate) ALL NODES;
+
+
+CREATE LOCAL TEMP TABLE ZU_Subscription_stg_Tmp_Key ON COMMIT PRESERVE ROWS AS
+(
+SELECT id, max(UpdatedDate) as UpdatedDate FROM ZU_Subscription_stg_Tmp group by id)
+SEGMENTED BY HASH(ID,UpdatedDate) ALL NODES;
+
+/* Inserting Stage table data into Historical Table */
+
+insert /*+DIRECT*/ into swt_rpt_stg.ZU_Subscription_Hist
+(
+Id
+,AccountId
+,ApttusOrderID__c
+,ApttusOrderNumber__c
+,AutoRenew
+,CancelledDate
+,ContractAcceptanceDate
+,ContractEffectiveDate
+,CpqBundleJsonId__QT
+,CreatedById
+,CreatedDate
+,CreatorAccountId
+,CreatorInvoiceOwnerId
+,CurrentTerm
+,CurrentTermPeriodType
+,Incoterm__c
+,InitialTerm
+,InitialTermPeriodType
+,InvoiceOwnerId
+,IsInvoiceSeparate
+,LargeQuoteID__c
+,Name
+,NetSuiteBusinessArea__c
+,NetSuiteGLAccount__c
+,NetSuiteProfitCenter__c
+,Notes
+,OpportunityCloseDate__QT
+,OpportunityName__QT
+,OriginalCreatedDate
+,OriginalId
+,POAmount__c
+,PONumber__c
+,PreviousSubscriptionId
+,QuoteBusinessType__QT
+,QuoteNumber__QT
+,QuoteType__QT
+,RenewalSetting
+,RenewalTerm
+,RenewalTermPeriodType
+,ServiceActivationDate
+,Status
+,SubscriptionEndDate
+,SubscriptionStartDate
+,Subsidiary__c
+,SubsidiaryExternalID__c
+,TermEndDate
+,TermStartDate
+,TermType
+,UpdatedById
+,UpdatedDate
+,Version
+,CustomerSubscriptionName__c
+,OrderType__c
+,GotoMarketRoute__c
+,SWT_Order_Internal_Id__c
+,LD_DT
+,SWT_INS_DT
+,d_source
+)
+SELECT
+Id
+,AccountId
+,ApttusOrderID__c
+,ApttusOrderNumber__c
+,AutoRenew
+,CancelledDate
+,ContractAcceptanceDate
+,ContractEffectiveDate
+,CpqBundleJsonId__QT
+,CreatedById
+,CreatedDate
+,CreatorAccountId
+,CreatorInvoiceOwnerId
+,CurrentTerm
+,CurrentTermPeriodType
+,Incoterm__c
+,InitialTerm
+,InitialTermPeriodType
+,InvoiceOwnerId
+,IsInvoiceSeparate
+,LargeQuoteID__c
+,Name
+,NetSuiteBusinessArea__c
+,NetSuiteGLAccount__c
+,NetSuiteProfitCenter__c
+,Notes
+,OpportunityCloseDate__QT
+,OpportunityName__QT
+,OriginalCreatedDate
+,OriginalId
+,POAmount__c
+,PONumber__c
+,PreviousSubscriptionId
+,QuoteBusinessType__QT
+,QuoteNumber__QT
+,QuoteType__QT
+,RenewalSetting
+,RenewalTerm
+,RenewalTermPeriodType
+,ServiceActivationDate
+,Status
+,SubscriptionEndDate
+,SubscriptionStartDate
+,Subsidiary__c
+,SubsidiaryExternalID__c
+,TermEndDate
+,TermStartDate
+,TermType
+,UpdatedById
+,UpdatedDate
+,Version
+,CustomerSubscriptionName__c
+,OrderType__c
+,GotoMarketRoute__c
+,SWT_Order_Internal_Id__c
+,SYSDATE AS LD_DT
+,SWT_INS_DT
+,'base'
+FROM "swt_rpt_base".ZU_Subscription WHERE id in
+(SELECT STG.id FROM ZU_Subscription_stg_Tmp_Key STG JOIN ZU_Subscription_base_Tmp
+ON STG.id = ZU_Subscription_base_Tmp.id AND STG.UpdatedDate >= ZU_Subscription_base_Tmp.UpdatedDate);
+
+
+
+/* Deleting before seven days data from current date in the Historical Table */
+
+delete /*+DIRECT*/ from swt_rpt_stg.ZU_Subscription_Hist  where LD_DT::date <= TIMESTAMPADD(DAY,-7,sysdate)::date;
+
+
+/* Incremental VSQL script for loading data from Stage to Base */
+
+DELETE /*+DIRECT*/ FROM "swt_rpt_base".ZU_Subscription WHERE id in
+(SELECT STG.id FROM ZU_Subscription_stg_Tmp_Key STG JOIN ZU_Subscription_base_Tmp
+ON STG.id = ZU_Subscription_base_Tmp.id AND STG.UpdatedDate >= ZU_Subscription_base_Tmp.UpdatedDate);
+
+INSERT /*+DIRECT*/ INTO "swt_rpt_base".ZU_Subscription
+(
+Id
+,AccountId
+,ApttusOrderID__c
+,ApttusOrderNumber__c
+,AutoRenew
+,CancelledDate
+,ContractAcceptanceDate
+,ContractEffectiveDate
+,CpqBundleJsonId__QT
+,CreatedById
+,CreatedDate
+,CreatorAccountId
+,CreatorInvoiceOwnerId
+,CurrentTerm
+,CurrentTermPeriodType
+,Incoterm__c
+,InitialTerm
+,InitialTermPeriodType
+,InvoiceOwnerId
+,IsInvoiceSeparate
+,LargeQuoteID__c
+,Name
+,NetSuiteBusinessArea__c
+,NetSuiteGLAccount__c
+,NetSuiteProfitCenter__c
+,Notes
+,OpportunityCloseDate__QT
+,OpportunityName__QT
+,OriginalCreatedDate
+,OriginalId
+,POAmount__c
+,PONumber__c
+,PreviousSubscriptionId
+,QuoteBusinessType__QT
+,QuoteNumber__QT
+,QuoteType__QT
+,RenewalSetting
+,RenewalTerm
+,RenewalTermPeriodType
+,ServiceActivationDate
+,Status
+,SubscriptionEndDate
+,SubscriptionStartDate
+,Subsidiary__c
+,SubsidiaryExternalID__c
+,TermEndDate
+,TermStartDate
+,TermType
+,UpdatedById
+,UpdatedDate
+,Version
+,CustomerSubscriptionName__c
+,OrderType__c
+,GotoMarketRoute__c
+,SWT_Order_Internal_Id__c
+,SWT_INS_DT
+)
+SELECT DISTINCT 
+ZU_Subscription_stg_Tmp.Id
+,AccountId
+,ApttusOrderID__c
+,ApttusOrderNumber__c
+,AutoRenew
+,CancelledDate
+,ContractAcceptanceDate
+,ContractEffectiveDate
+,CpqBundleJsonId__QT
+,CreatedById
+,CreatedDate
+,CreatorAccountId
+,CreatorInvoiceOwnerId
+,CurrentTerm
+,CurrentTermPeriodType
+,Incoterm__c
+,InitialTerm
+,InitialTermPeriodType
+,InvoiceOwnerId
+,IsInvoiceSeparate
+,LargeQuoteID__c
+,Name
+,NetSuiteBusinessArea__c
+,NetSuiteGLAccount__c
+,NetSuiteProfitCenter__c
+,Notes
+,OpportunityCloseDate__QT
+,OpportunityName__QT
+,OriginalCreatedDate
+,OriginalId
+,POAmount__c
+,PONumber__c
+,PreviousSubscriptionId
+,QuoteBusinessType__QT
+,QuoteNumber__QT
+,QuoteType__QT
+,RenewalSetting
+,RenewalTerm
+,RenewalTermPeriodType
+,ServiceActivationDate
+,Status
+,SubscriptionEndDate
+,SubscriptionStartDate
+,Subsidiary__c
+,SubsidiaryExternalID__c
+,TermEndDate
+,TermStartDate
+,TermType
+,UpdatedById
+,ZU_Subscription_stg_Tmp.UpdatedDate
+,Version
+,CustomerSubscriptionName__c
+,OrderType__c
+,GotoMarketRoute__c
+,SWT_Order_Internal_Id__c
+,SYSDATE AS SWT_INS_DT
+FROM ZU_Subscription_stg_Tmp JOIN ZU_Subscription_stg_Tmp_Key ON ZU_Subscription_stg_Tmp.id= ZU_Subscription_stg_Tmp_Key.id AND ZU_Subscription_stg_Tmp.UpdatedDate=ZU_Subscription_stg_Tmp_Key.UpdatedDate
+WHERE NOT EXISTS
+(SELECT 1 FROM "swt_rpt_base".ZU_Subscription BASE
+WHERE ZU_Subscription_stg_Tmp.id = BASE.id);
+
+
+/*DELETE FROM swt_rpt_stg.FAST_LD_AUDT where SUBJECT_AREA = 'ZUORA' and
+TBL_NM = 'ZU_Subscription' and
+COMPLTN_STAT = 'N' and
+LD_DT=sysdate::date and 
+SEQ_ID = (select max(SEQ_ID) from swt_rpt_stg.FAST_LD_AUDT where  SUBJECT_AREA = 'ZUORA' and  TBL_NM = 'ZU_Subscription' and  COMPLTN_STAT = 'N');
+*/
+
+INSERT INTO swt_rpt_stg.FAST_LD_AUDT
+(
+SUBJECT_AREA
+,TBL_NM
+,LD_DT
+,START_DT_TIME
+,END_DT_TIME
+,SRC_REC_CNT
+,TGT_REC_CNT
+,COMPLTN_STAT
+)
+select 'ZUORA','ZU_Subscription',sysdate::date,(select st from Start_Time_Tmp),sysdate,(select count from Start_Time_Tmp) ,(select count(*) from swt_rpt_base.ZU_Subscription where SWT_INS_DT::date = sysdate::date),'Y';
+
+
+commit;
+
+SELECT DO_TM_TASK('mergeout', 'swt_rpt_base.ZU_Subscription');
+SELECT DO_TM_TASK('mergeout', 'swt_rpt_stg.ZU_Subscription_Hist');
+SELECT DO_TM_TASK('mergeout', 'swt_rpt_stg.FAST_LD_AUDT');
+select ANALYZE_STATISTICS('swt_rpt_base.ZU_Subscription');
+
